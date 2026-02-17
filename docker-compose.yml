@@ -1,0 +1,65 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DEBUG=${DEBUG:-false}
+    depends_on:
+      - redis
+    volumes:
+      - ./app:/app/app
+      - ./scrappers:/app/scrappers
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: celery -A workers.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./workers:/app/workers
+      - ./scrappers:/app/scrappers
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    command: celery -A workers.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  scraper:
+    build: .
+    working_dir: /app/scrappers
+    command: tail -f /dev/null
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./scrappers:/app/scrappers
+    restart: unless-stopped
+
+volumes:
+  redis_data:
